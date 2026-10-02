@@ -24,6 +24,11 @@ def enabled() -> bool:
     return bool(os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
 
 
+def _scoped_profile_id(profile_id: str) -> str:
+    namespace = os.environ.get("PORTFOLIO_DEPLOYMENT_NAMESPACE", "").strip().strip(":")
+    return f"{namespace}:{profile_id}" if namespace else profile_id
+
+
 def _settings() -> tuple[str, str]:
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -69,7 +74,7 @@ def _request(
 
 
 def _profile_query(profile_id: str) -> str:
-    return urllib.parse.urlencode({"profile_id": f"eq.{profile_id}", "select": "core,revision,updated_at"})
+    return urllib.parse.urlencode({"profile_id": f"eq.{_scoped_profile_id(profile_id)}", "select": "core,revision,updated_at"})
 
 
 def read_core(profile_id: str) -> tuple[dict | None, int, str | None]:
@@ -82,12 +87,13 @@ def read_core(profile_id: str) -> tuple[dict | None, int, str | None]:
 
 
 def read_history(profile_id: str) -> list[dict]:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     result: list[dict] = []
     offset = 0
     batch_size = 1000
     while True:
         query = urllib.parse.urlencode({
-            "profile_id": f"eq.{profile_id}",
+            "profile_id": f"eq.{scoped_profile_id}",
             "select": "day,data",
             "order": "day.asc",
             "offset": str(offset),
@@ -109,8 +115,9 @@ def read_history(profile_id: str) -> list[dict]:
 
 
 def read_recent_history(profile_id: str, limit: int = 3) -> list[dict]:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     query = urllib.parse.urlencode({
-        "profile_id": f"eq.{profile_id}",
+        "profile_id": f"eq.{scoped_profile_id}",
         "select": "day,data",
         "order": "day.desc",
         "limit": str(max(1, min(int(limit), 30))),
@@ -142,7 +149,7 @@ def read_portfolio_core(profile_id: str, recent_history_limit: int = 0) -> dict 
         return None
     core["history"] = recent_history
     core["_cloudRevision"] = revision
-    if profile_id == "friend":
+    if profile_id != "owner":
         core["_profileRevision"] = revision
         core["_profileSavedAt"] = updated_at
     return core
@@ -158,15 +165,16 @@ def read_portfolio(profile_id: str) -> dict | None:
         return None
     core["history"] = history
     core["_cloudRevision"] = revision
-    if profile_id == "friend":
+    if profile_id != "owner":
         core["_profileRevision"] = revision
         core["_profileSavedAt"] = updated_at
     return core
 
 
 def _write_history(profile_id: str, history: list[dict]) -> None:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     rows = [
-        {"profile_id": profile_id, "day": item.get("date"), "data": item}
+        {"profile_id": scoped_profile_id, "day": item.get("date"), "data": item}
         for item in history
         if isinstance(item, dict) and item.get("date")
     ]
@@ -184,10 +192,11 @@ def write_history_snapshots(profile_id: str, history: list[dict]) -> None:
 
 
 def delete_history_days(profile_id: str, days: list[str]) -> None:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     valid_days = sorted({str(day) for day in days if day})
     for day in valid_days:
         query = urllib.parse.urlencode({
-            "profile_id": f"eq.{profile_id}",
+            "profile_id": f"eq.{scoped_profile_id}",
             "day": f"eq.{day}",
         })
         _request(
@@ -198,6 +207,7 @@ def delete_history_days(profile_id: str, days: list[str]) -> None:
 
 
 def write_portfolio(profile_id: str, data: dict, expected_revision: int | None = None) -> dict:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     current_core, current_revision, _ = read_core(profile_id)
     if expected_revision is not None and current_core is not None and expected_revision != current_revision:
         raise CloudConflictError("持仓已在另一台设备更新，请刷新页面后重试")
@@ -215,20 +225,21 @@ def write_portfolio(profile_id: str, data: dict, expected_revision: int | None =
     rows = _request(
         "portfolio_profiles?on_conflict=profile_id",
         method="POST",
-        payload={"profile_id": profile_id, "core": saved, "revision": next_revision, "updated_at": now},
+        payload={"profile_id": scoped_profile_id, "core": saved, "revision": next_revision, "updated_at": now},
         prefer="resolution=merge-duplicates,return=representation",
     )
     if not isinstance(rows, list) or not rows:
         raise CloudStoreError("Supabase 未返回保存结果")
     _write_history(profile_id, history)
     saved["history"] = history
-    if profile_id == "friend":
+    if profile_id != "owner":
         saved["_profileRevision"] = next_revision
         saved["_profileSavedAt"] = now
     return saved
 
 
 def write_live_snapshot(profile_id: str, data: dict, expected_revision: int) -> bool:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     saved = copy.deepcopy(data)
     history = saved.pop("history", [])
     if not isinstance(history, list):
@@ -237,7 +248,7 @@ def write_live_snapshot(profile_id: str, data: dict, expected_revision: int) -> 
     saved.pop("_profileRevision", None)
     saved.pop("_profileSavedAt", None)
     query = urllib.parse.urlencode({
-        "profile_id": f"eq.{profile_id}",
+        "profile_id": f"eq.{scoped_profile_id}",
         "revision": f"eq.{expected_revision}",
         "select": "revision",
     })
@@ -254,6 +265,7 @@ def write_live_snapshot(profile_id: str, data: dict, expected_revision: int) -> 
 
 
 def write_daily_ai_summary(profile_id: str, date_text: str, report: dict, limit: int = 60) -> dict:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     core, revision, _ = read_core(profile_id)
     if core is None:
         raise CloudStoreError("云端持仓尚未建立")
@@ -264,7 +276,7 @@ def write_daily_ai_summary(profile_id: str, date_text: str, report: dict, limit:
     core["dailyAiSummaries"] = {day: summaries[day] for day in kept_dates}
     now = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
     query = urllib.parse.urlencode({
-        "profile_id": f"eq.{profile_id}",
+        "profile_id": f"eq.{scoped_profile_id}",
         "revision": f"eq.{revision}",
         "select": "revision",
     })
@@ -280,7 +292,7 @@ def write_daily_ai_summary(profile_id: str, date_text: str, report: dict, limit:
 
 
 def read_goal_settings(profile_id: str) -> dict | None:
-    query = urllib.parse.urlencode({"profile_id": f"eq.{profile_id}", "select": "settings"})
+    query = urllib.parse.urlencode({"profile_id": f"eq.{_scoped_profile_id(profile_id)}", "select": "settings"})
     rows = _request(f"goal_settings?{query}")
     if not isinstance(rows, list) or not rows:
         return None
@@ -289,11 +301,27 @@ def read_goal_settings(profile_id: str) -> dict | None:
 
 
 def write_goal_settings(profile_id: str, settings: dict) -> dict:
+    scoped_profile_id = _scoped_profile_id(profile_id)
     now = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
     _request(
         "goal_settings?on_conflict=profile_id",
         method="POST",
-        payload={"profile_id": profile_id, "settings": settings, "updated_at": now},
+        payload={"profile_id": scoped_profile_id, "settings": settings, "updated_at": now},
         prefer="resolution=merge-duplicates,return=minimal",
     )
     return copy.deepcopy(settings)
+
+
+def read_app_accounts() -> list[dict]:
+    core, _, _ = read_core("__accounts__")
+    accounts = core.get("accounts") if isinstance(core, dict) else None
+    return copy.deepcopy(accounts) if isinstance(accounts, list) else []
+
+
+def write_app_accounts(accounts: list[dict]) -> None:
+    write_portfolio("__accounts__", {"accounts": copy.deepcopy(accounts), "history": []})
+
+
+def delete_profile(profile_id: str) -> None:
+    query = urllib.parse.urlencode({"profile_id": f"eq.{_scoped_profile_id(profile_id)}"})
+    _request(f"portfolio_profiles?{query}", method="DELETE", prefer="return=minimal")

@@ -17,8 +17,9 @@ const simulatorProfileToken = simulatorLocalMode ? (simulatorRequestedProfile ||
 const simulatorQueryToken = simulatorQuery.get('token');
 if (simulatorQueryToken && !simulatorLocalMode) localStorage.setItem('portfolioAccessToken', simulatorQueryToken);
 const simulatorAccessToken = simulatorLocalMode ? null : simulatorQueryToken || localStorage.getItem('portfolioAccessToken');
-const simulatorHasRemoteSession = Boolean((simulatorSessionMode && simulatorSessionMode !== 'user') || simulatorProfileToken || simulatorAccessToken);
 const simulatorCloudDeployment = location.hostname.endsWith('.vercel.app');
+const simulatorRemoteProfileMode = Boolean(simulatorProfileToken) || (simulatorSessionMode === 'user' && simulatorCloudDeployment);
+const simulatorHasRemoteSession = Boolean((simulatorSessionMode && simulatorSessionMode !== 'user') || simulatorRemoteProfileMode || simulatorAccessToken);
 const LEGACY_STORAGE_KEY = 'portfolio-goal-simulator-v1';
 const simulatorStorageScope = simulatorRequestedProfile
   ? `profile-${simulatorRequestedProfile.slice(0, 12)}`
@@ -63,7 +64,7 @@ function authenticatedSimulatorUrl(url) {
 }
 
 function profileSimulatorUrl(url) {
-  return simulatorProfileToken === 'session'
+  return simulatorSessionMode === 'user' || simulatorProfileToken === 'session'
     ? url
     : `${url}?profile=${encodeURIComponent(simulatorProfileToken || '')}`;
 }
@@ -417,7 +418,7 @@ async function syncMainPortfolio(syncPlans = false) {
   if (simulatorLocalMode) {
     try {
       let localData = null;
-      if (simulatorProfileToken) {
+      if (simulatorRemoteProfileMode) {
         const response = await fetch(profileSimulatorUrl('/api/profile-portfolio'), { cache: 'no-store' });
         const payload = await response.json();
         if (response.ok && !payload.error) localData = payload.portfolio;
@@ -827,7 +828,7 @@ async function saveRemoteState(keepalive = false) {
   const snapshot = JSON.stringify(state);
   const snapshotUpdatedAt = state.updatedAt;
   try {
-    const endpoint = simulatorProfileToken
+    const endpoint = simulatorRemoteProfileMode
       ? profileSimulatorUrl('/api/profile-goal-simulator')
       : authenticatedSimulatorUrl('/api/goal-simulator');
     const response = await fetch(endpoint, {
@@ -847,7 +848,7 @@ async function saveRemoteState(keepalive = false) {
 function saveState(remote = true, touch = true) {
   if (touch) state.updatedAt = new Date().toISOString();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (!remote || (simulatorLocalMode && !simulatorProfileToken)) return;
+  if (!remote || (simulatorLocalMode && !simulatorRemoteProfileMode)) return;
   localStorage.setItem(DIRTY_KEY, '1');
   if (!remoteSettingsReady) return;
   clearTimeout(remoteSaveTimer);
@@ -857,7 +858,7 @@ function saveState(remote = true, touch = true) {
 async function loadRemoteState() {
   if (!simulatorHasRemoteSession) return false;
   try {
-    const endpoint = simulatorProfileToken
+    const endpoint = simulatorRemoteProfileMode
       ? profileSimulatorUrl('/api/profile-goal-simulator')
       : authenticatedSimulatorUrl('/api/goal-simulator');
     const response = await fetch(endpoint, {

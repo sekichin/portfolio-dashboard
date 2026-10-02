@@ -157,6 +157,7 @@ let investmentPlanSaveRevision = 0;
 let investmentPlanOperationQueue = Promise.resolve();
 const cloudDeployment = location.hostname.endsWith('.vercel.app');
 const temporaryQuoteBridge = location.hostname.endsWith('.trycloudflare.com');
+const remoteProfileMode = Boolean(localProfileToken) || (sessionMode === 'user' && cloudDeployment);
 function configureChartTheme(force = false) {
   if (!globalThis.Chart) return globalThis.Chart;
   const theme = usesIbkrTheme() ? 'ibkr' : 'light';
@@ -191,7 +192,7 @@ function portfolioSavePayload(data) {
   const { history, ...core } = data || {};
   return core;
 }
-const profileApiUrl = path => localProfileToken === 'session'
+const profileApiUrl = path => sessionMode === 'user' || localProfileToken === 'session'
   ? path
   : `${path}?profile=${encodeURIComponent(localProfileToken || '')}`;
 const cacheBustedUrl = url => `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`;
@@ -260,7 +261,7 @@ function portfolioHasContent(data) {
   );
 }
 async function readProfilePortfolio() {
-  if (!localProfileToken) return null;
+  if (!remoteProfileMode) return null;
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -339,7 +340,7 @@ function hydrateInitialHistoryInBackground(historyRequest) {
   historyHydrationPromise = Promise.resolve(historyRequest).then(history => {
     historyHydrated = true;
     const hydrated = { ...(portfolio || {}), history: historyWithLiveOverrides(history) };
-    if (localPortfolioMode && localProfileToken) writeLocalPortfolio(hydrated);
+    if (localPortfolioMode && remoteProfileMode) writeLocalPortfolio(hydrated);
     render(hydrated);
     return hydrated;
   }).catch(error => {
@@ -357,14 +358,14 @@ async function hydratePortfolioHistory({ force = false } = {}) {
     const history = await fetchPortfolioHistory();
     const hydrated = { ...(portfolio || {}), history };
     historyHydrated = true;
-    if (localPortfolioMode && localProfileToken) writeLocalPortfolio(hydrated);
+    if (localPortfolioMode && remoteProfileMode) writeLocalPortfolio(hydrated);
     render(hydrated);
     return hydrated;
   })().finally(() => { historyHydrationPromise = null; });
   return historyHydrationPromise;
 }
 async function writeProfilePortfolio(data) {
-  if (!localProfileToken) return data;
+  if (!remoteProfileMode) return data;
   return enqueueProfileOperation(async () => {
     let outgoing = {
       ...portfolioSavePayload(data),
@@ -2083,7 +2084,7 @@ function historicalProfitIncludingManualRealized(baseProfit) {
 async function savePortfolioData(data) {
   if (localPortfolioMode) {
     writeLocalPortfolio(data);
-    if (!localProfileToken) return data;
+    if (!remoteProfileMode) return data;
     localStorage.setItem(localPortfolioPendingKey, '1');
     const saved = withPreservedHistory(await writeProfilePortfolio(data), data, portfolio);
     writeLocalPortfolio(saved);
@@ -2169,7 +2170,7 @@ async function refreshPortfolioData(data = portfolio) {
   }
   if (cloudDeployment) {
     const requestPatch = () => fetchLiveQuotePatch();
-    const patch = localProfileToken
+    const patch = remoteProfileMode
       ? await enqueueProfileOperation(requestPatch)
       : await requestPatch();
     const refreshedPortfolio = mergeLivePatchIntoData(data, patch);
@@ -2179,17 +2180,17 @@ async function refreshPortfolioData(data = portfolio) {
     }
     return { portfolio: refreshedPortfolio, errors: patch.errors || [] };
   }
-  const refreshPath = localPortfolioMode && localProfileToken
+  const refreshPath = localPortfolioMode && remoteProfileMode
     ? profileApiUrl('/api/profile-refresh')
     : localPortfolioMode ? '/api/local-refresh' : '/api/refresh';
   const requestRefresh = async () => {
     const response = await apiFetch(refreshPath, {
       method: 'POST',
-      ...(localPortfolioMode && !localProfileToken ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) } : {})
+      ...(localPortfolioMode && !remoteProfileMode ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) } : {})
     });
     return { response, result: await response.json() };
   };
-  const { response, result } = localProfileToken
+  const { response, result } = remoteProfileMode
     ? await enqueueProfileOperation(requestRefresh)
     : await requestRefresh();
   if (!response.ok || result.error) throw new Error(result.error || '行情刷新失败');
@@ -2311,7 +2312,7 @@ function scheduleLiveRender() {
   }, delay);
 }
 async function fetchLiveQuotePatch() {
-  if (!cloudDeployment || (localPortfolioMode && !localProfileToken)) return null;
+  if (!cloudDeployment || (localPortfolioMode && !remoteProfileMode)) return null;
   if (localPortfolioMode) {
     const response = await fetch(cacheBustedUrl(profileApiUrl('/api/profile-live-quotes')), {
       method: 'POST',
@@ -2377,7 +2378,7 @@ function applyInitialLivePatchInBackground(request) {
 }
 async function load() {
   const privacyMigrationKey = 'portfolioLedgerTestPrivacyV1';
-  if (temporaryQuoteBridge && localPortfolioMode && !localProfileToken && localStorage.getItem(privacyMigrationKey) !== '1') {
+  if (temporaryQuoteBridge && localPortfolioMode && !remoteProfileMode && localStorage.getItem(privacyMigrationKey) !== '1') {
     const existing = readLocalPortfolio();
     const plan = String(existing.investmentPlan || '');
     if (['TSLA、SpaceX', 'FANG+：40,000', '住友商事持股会（8053）'].some(marker => plan.includes(marker))) {
@@ -2386,7 +2387,7 @@ async function load() {
     localStorage.removeItem(investmentPlanDraftKey);
     localStorage.setItem(privacyMigrationKey, '1');
   }
-  if (localPortfolioMode && !localProfileToken && queryParameters.get('resetHoldings') === '1') {
+  if (localPortfolioMode && !remoteProfileMode && queryParameters.get('resetHoldings') === '1') {
     const existing = readLocalPortfolio();
     writeLocalPortfolio({
       ...existing,
@@ -2408,7 +2409,7 @@ async function load() {
   const initialLivePatchRequest = primeLiveQuotes ? fetchLiveQuotePatch().catch(() => null) : null;
   if (localPortfolioMode) {
     const localData = readLocalPortfolio();
-    if (!localProfileToken) {
+    if (!remoteProfileMode) {
       render(localData);
       return;
     }
@@ -2445,10 +2446,10 @@ async function load() {
       if (initialHistoryRequest) await initialHistoryRequest.catch(() => null);
       if (portfolioHasContent(localData)) {
         render(localData);
-        document.querySelector('#notice').textContent = `暂时无法同步朋友数据，已显示本机上次数据：${error.message}`;
+        document.querySelector('#notice').textContent = `暂时无法同步云端数据，已显示本机上次数据：${error.message}`;
         return;
       }
-      document.querySelector('#notice').textContent = `朋友数据加载失败，请重新打开完整链接：${error.message}`;
+      document.querySelector('#notice').textContent = `云端数据加载失败，请稍后重试：${error.message}`;
       throw error;
     }
     return;
@@ -2555,7 +2556,7 @@ function applyLiveQuotePatch(patch) {
     renderCalendar();
   }
   portfolio.quoteErrors = patch.errors || [];
-  if (localPortfolioMode && localProfileToken) {
+  if (localPortfolioMode && remoteProfileMode) {
     if (patch.profileRevision != null) portfolio._profileRevision = patch.profileRevision;
     if (patch.profileSavedAt) portfolio._profileSavedAt = patch.profileSavedAt;
     writeLocalPortfolio(portfolio);
@@ -2577,7 +2578,7 @@ function connectLiveQuotes() {
 }
 async function pollLiveQuotes() {
   if (liveQuotePollActive || document.hidden || managementPanelIsOpen()) return;
-  if (localPortfolioMode && !localProfileToken) return;
+  if (localPortfolioMode && !remoteProfileMode) return;
   if (lastLiveEventAt && Date.now() - lastLiveEventAt < 4500) return;
   liveQuotePollActive = true;
   try {

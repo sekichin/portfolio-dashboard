@@ -191,6 +191,8 @@ def login_key_hash(value: str) -> str:
 
 def read_test_accounts() -> list[dict]:
     with TEST_ACCOUNTS_LOCK:
+        if CLOUD_MODE:
+            return cloud_store.read_app_accounts()
         if not TEST_ACCOUNTS_FILE.exists():
             return []
         try:
@@ -202,6 +204,9 @@ def read_test_accounts() -> list[dict]:
 
 def write_test_accounts(accounts: list[dict]) -> None:
     with TEST_ACCOUNTS_LOCK:
+        if CLOUD_MODE:
+            cloud_store.write_app_accounts(accounts)
+            return
         TEST_ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         temporary = TEST_ACCOUNTS_FILE.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(accounts, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -247,6 +252,19 @@ def create_trial_account() -> tuple[dict, str]:
     }
     accounts.append(account)
     write_test_accounts(accounts)
+    if CLOUD_MODE:
+        cloud_store.write_portfolio(user_profile_id(account["id"]), {
+            "holdings": [],
+            "transactions": [],
+            "realizedTrades": [],
+            "history": [],
+            "fx": {},
+            "accountStartDate": None,
+            "ledgerStartDate": None,
+            "lastRefreshAt": None,
+            "investmentPlan": "",
+            "totalAssetsJPY": 0,
+        })
     return account, raw
 
 
@@ -382,7 +400,12 @@ def read_friend_profile_core(recent_history_limit: int = 0) -> dict | None:
 def read_profile_history(profile_id: str) -> list[dict]:
     if CLOUD_MODE:
         return cloud_store.read_history(profile_id)
-    data = read_friend_profile() if profile_id == "friend" else read_data()
+    if profile_id == "friend":
+        data = read_friend_profile()
+    elif profile_id.startswith("user:"):
+        data = read_account_profile(profile_id)
+    else:
+        data = read_data()
     return copy.deepcopy(data.get("history", [])) if data else []
 
 
@@ -420,6 +443,74 @@ def write_friend_profile(data: dict, expected_revision: int | None = None) -> di
         temporary_file.write_text(json.dumps(saved, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         temporary_file.replace(FRIEND_PROFILE_FILE)
         return saved
+
+
+def user_profile_id(user_id: str) -> str:
+    return f"user:{user_id}"
+
+
+def read_account_profile(profile_id: str) -> dict | None:
+    if profile_id == "friend":
+        return read_friend_profile()
+    if CLOUD_MODE:
+        return cloud_store.read_portfolio(profile_id)
+    path = TEST_USER_DATA_DIR / profile_id.removeprefix("user:") / "portfolio.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) and isinstance(data.get("holdings"), list) else None
+
+
+def read_account_profile_core(profile_id: str, recent_history_limit: int = 0) -> dict | None:
+    if profile_id == "friend":
+        return read_friend_profile_core(recent_history_limit=recent_history_limit)
+    if CLOUD_MODE:
+        return cloud_store.read_portfolio_core(profile_id, recent_history_limit=recent_history_limit)
+    data = read_account_profile(profile_id)
+    if data is None:
+        return None
+    core = copy.deepcopy(data)
+    history = core.get("history", [])
+    core["history"] = history[-recent_history_limit:] if recent_history_limit else []
+    return core
+
+
+def write_account_profile(profile_id: str, data: dict, expected_revision: int | None = None) -> dict:
+    if profile_id == "friend":
+        return write_friend_profile(data, expected_revision=expected_revision)
+    normalize_gold_quote_sources(data)
+    if CLOUD_MODE:
+        stale_history_days = data.pop("_staleHistoryDays", [])
+        try:
+            saved = cloud_store.write_portfolio(profile_id, data, expected_revision=expected_revision)
+        except cloud_store.CloudConflictError as error:
+            raise ProfileConflictError(str(error)) from error
+        if stale_history_days:
+            cloud_store.delete_history_days(profile_id, stale_history_days)
+            stale_day_set = set(stale_history_days)
+            saved["history"] = [
+                item for item in saved.get("history", [])
+                if item.get("date") not in stale_day_set
+            ]
+        return saved
+    user_directory = TEST_USER_DATA_DIR / profile_id.removeprefix("user:")
+    path = user_directory / "portfolio.json"
+    current_revision = 0
+    if path.exists():
+        try:
+            current_revision = int(json.loads(path.read_text(encoding="utf-8")).get("_profileRevision") or 0)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            current_revision = 0
+    if expected_revision is not None and expected_revision != current_revision:
+        raise ProfileConflictError("持仓已在另一台设备更新，请刷新页面后重试")
+    saved = copy.deepcopy(data)
+    saved["_profileRevision"] = current_revision + 1
+    saved["_profileSavedAt"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
+    user_directory.mkdir(parents=True, exist_ok=True)
+    temporary_file = path.with_suffix(".json.tmp")
+    temporary_file.write_text(json.dumps(saved, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary_file.replace(path)
+    return saved
 
 
 def friend_slow_quotes_due(data: dict) -> bool:
@@ -593,7 +684,12 @@ def save_daily_ai_summary(profile_id: str, date_text: str, report: dict) -> dict
 def read_goal_settings(profile_id: str) -> dict | None:
     if CLOUD_MODE:
         return cloud_store.read_goal_settings(profile_id)
-    path = FRIEND_GOAL_SIMULATOR_FILE if profile_id == "friend" else GOAL_SIMULATOR_FILE
+    if profile_id == "friend":
+        path = FRIEND_GOAL_SIMULATOR_FILE
+    elif profile_id.startswith("user:"):
+        path = TEST_USER_DATA_DIR / profile_id.removeprefix("user:") / "goal-simulator.json"
+    else:
+        path = GOAL_SIMULATOR_FILE
     if not path.exists():
         return None
     settings = json.loads(path.read_text(encoding="utf-8"))
@@ -603,7 +699,12 @@ def read_goal_settings(profile_id: str) -> dict | None:
 def write_goal_settings(profile_id: str, settings: dict) -> dict:
     if CLOUD_MODE:
         return cloud_store.write_goal_settings(profile_id, settings)
-    path = FRIEND_GOAL_SIMULATOR_FILE if profile_id == "friend" else GOAL_SIMULATOR_FILE
+    if profile_id == "friend":
+        path = FRIEND_GOAL_SIMULATOR_FILE
+    elif profile_id.startswith("user:"):
+        path = TEST_USER_DATA_DIR / profile_id.removeprefix("user:") / "goal-simulator.json"
+    else:
+        path = GOAL_SIMULATOR_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_file = path.with_suffix(".tmp")
     temporary_file.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -3239,6 +3340,10 @@ class Handler(SimpleHTTPRequestHandler):
         user_cookie = self.request_cookies().get("portfolio_user")
         return verify_user_cookie(user_cookie.value) if user_cookie else None
 
+    def account_profile_id(self) -> str:
+        user_id = self.session_user_id()
+        return user_profile_id(user_id) if user_id else "friend"
+
     def send_login_result(
         self,
         mode: str,
@@ -3354,6 +3459,8 @@ class Handler(SimpleHTTPRequestHandler):
             "/api/profile-goal-ai-report",
             "/api/profile-daily-ai-summary",
         }:
+            if self.session_mode() == "user" and self.session_user_id():
+                return True
             query_profile = urllib.parse.parse_qs(parsed.query).get("profile", [None])[0]
             header_profile = self.headers.get("X-Portfolio-Profile")
             profile_cookie = self.request_cookies().get("portfolio_profile")
@@ -3455,7 +3562,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if request_path == "/api/profile-portfolio":
             try:
-                profile = read_friend_profile()
+                profile = read_account_profile(self.account_profile_id())
                 if isinstance(profile, dict):
                     align_live_calendar_snapshot(profile)
                     profile["history"] = dashboard_history(profile.get("history"))
@@ -3465,19 +3572,20 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if request_path == "/api/profile-portfolio-core":
             try:
-                self.send_json({"portfolio": align_live_calendar_snapshot(read_friend_profile_core(recent_history_limit=3))})
+                profile = read_account_profile_core(self.account_profile_id(), recent_history_limit=3)
+                self.send_json({"portfolio": align_live_calendar_snapshot(profile)})
             except (OSError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if request_path == "/api/profile-portfolio-history":
             try:
-                self.send_json({"history": dashboard_history(read_profile_history("friend"))})
+                self.send_json({"history": dashboard_history(read_profile_history(self.account_profile_id()))})
             except (OSError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if request_path == "/api/profile-goal-simulator":
             try:
-                self.send_json({"settings": read_goal_settings("friend")})
+                self.send_json({"settings": read_goal_settings(self.account_profile_id())})
             except (OSError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
@@ -3793,6 +3901,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return
                 elif action == "delete":
                     accounts = [item for item in accounts if item.get("id") != account_id]
+                    if CLOUD_MODE:
+                        cloud_store.delete_profile(user_profile_id(account_id))
                     user_directory = TEST_USER_DATA_DIR / account_id
                     if user_directory.is_dir() and user_directory.parent == TEST_USER_DATA_DIR:
                         shutil.rmtree(user_directory)
@@ -3920,21 +4030,22 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if request_path == "/api/profile-portfolio":
             try:
+                profile_id = self.account_profile_id()
                 length = int(self.headers.get("Content-Length", 0))
                 if length <= 0 or length > 25_000_000:
-                    raise ValueError("朋友持仓备份大小不正确")
+                    raise ValueError("持仓备份大小不正确")
                 data = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(data, dict) or not isinstance(data.get("holdings"), list):
-                    raise ValueError("朋友持仓备份格式不正确")
+                    raise ValueError("持仓备份格式不正确")
                 if len(data["holdings"]) > 50:
-                    raise ValueError("朋友持仓数量过多")
+                    raise ValueError("持仓数量过多")
                 normalize_trade_records(data)
                 expected_revision = int(data.get("_profileRevision") or 0)
-                saved = write_friend_profile(data, expected_revision=expected_revision)
+                saved = write_account_profile(profile_id, data, expected_revision=expected_revision)
                 STREAM_WAKE_EVENT.set()
                 self.send_json({"portfolio": saved})
             except ProfileConflictError as error:
-                self.send_json({"error": str(error), "portfolio": read_friend_profile()}, HTTPStatus.CONFLICT)
+                self.send_json({"error": str(error), "portfolio": read_account_profile(self.account_profile_id())}, HTTPStatus.CONFLICT)
             except (ValueError, TypeError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
             except OSError as error:
@@ -3948,7 +4059,7 @@ class Handler(SimpleHTTPRequestHandler):
                 settings = json.loads(self.rfile.read(length).decode("utf-8"))
                 if not isinstance(settings, dict):
                     raise ValueError("目标预测设置格式不正确")
-                self.send_json({"settings": write_goal_settings("friend", settings)})
+                self.send_json({"settings": write_goal_settings(self.account_profile_id(), settings)})
             except (ValueError, TypeError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
             except OSError as error:
@@ -3956,10 +4067,11 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if request_path in {"/api/profile-refresh", "/api/profile-live-quotes"}:
             try:
+                profile_id = self.account_profile_id()
                 self.discard_request_body()
-                data = read_friend_profile_core(recent_history_limit=3) if request_path == "/api/profile-live-quotes" else read_friend_profile()
+                data = read_account_profile_core(profile_id, recent_history_limit=3) if request_path == "/api/profile-live-quotes" else read_account_profile(profile_id)
                 if not data:
-                    raise ValueError("朋友持仓尚未建立，请先导入或添加持仓")
+                    raise ValueError("持仓尚未建立，请先导入或添加持仓")
                 expected_revision = int(data.get("_profileRevision") or 0)
                 if request_path == "/api/profile-refresh":
                     refreshed, errors = refresh_quotes(copy.deepcopy(data), persist=False)
@@ -3971,17 +4083,17 @@ class Handler(SimpleHTTPRequestHandler):
                     )
                     for snapshot_date in current_snapshot_dates(refreshed):
                         upsert_current_history_snapshot(refreshed, snapshot_date)
-                    persist_cloud_live_snapshot("friend", data, refreshed)
+                    persist_cloud_live_snapshot(profile_id, data, refreshed)
                 if request_path == "/api/profile-live-quotes":
                     patch = live_patch(refreshed, errors)
                     patch["profileRevision"] = data.get("_profileRevision")
                     patch["profileSavedAt"] = data.get("_profileSavedAt")
                     self.send_json(patch)
                 else:
-                    saved = write_friend_profile(refreshed, expected_revision=expected_revision)
+                    saved = write_account_profile(profile_id, refreshed, expected_revision=expected_revision)
                     self.send_json({"portfolio": saved, "errors": errors})
             except ProfileConflictError as error:
-                self.send_json({"error": str(error), "portfolio": read_friend_profile()}, HTTPStatus.CONFLICT)
+                self.send_json({"error": str(error), "portfolio": read_account_profile(self.account_profile_id())}, HTTPStatus.CONFLICT)
             except (ValueError, TypeError, json.JSONDecodeError) as error:
                 self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
             except Exception as error:
