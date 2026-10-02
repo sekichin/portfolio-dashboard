@@ -1,0 +1,139 @@
+body[data-dashboard-view="overview"] #holdings-panel,
+body[data-dashboard-view="overview"] #calendar-panel,
+body[data-dashboard-view="overview"] #analysis-panel,
+body[data-dashboard-view="holdings"] .dashboard-overview-section,
+body[data-dashboard-view="holdings"] #calendar-panel,
+body[data-dashboard-view="holdings"] #analysis-panel,
+body[data-dashboard-view="calendar"] .dashboard-overview-section,
+body[data-dashboard-view="calendar"] #holdings-panel,
+body[data-dashboard-view="calendar"] #analysis-panel,
+body[data-dashboard-view="analysis"] .dashboard-overview-section,
+body[data-dashboard-view="analysis"] #holdings-panel,
+body[data-dashboard-view="analysis"] #calendar-panel,
+body[data-dashboard-view="settings"] .dashboard-overview-section,
+body[data-dashboard-view="settings"] #holdings-panel,
+body[data-dashboard-view="settings"] #calendar-panel,
+body[data-dashboard-view="settings"] #analysis-panel {
+  display: none !important;
+}
+
+body:not([data-dashboard-view="settings"]) #settings {
+  display: none !important;
+}
+
+#analysis-toggle,
+#analysis-panel {
+  display: none !important;
+}
+
+.dashboard-navigation {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  width: min(100%, 540px);
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+
+main { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+#dashboard-view-content { position: relative; }
+.tab-swipe-snapshot {
+  position: fixed;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--paper);
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+}
+
+#dashboard-view-content.tab-swipe-dragging,
+.tab-swipe-snapshot.tab-swipe-dragging {
+  animation: none !important;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #dashboard-view-content.tab-swipe-enter-forward { animation: dashboard-tab-enter-forward 320ms cubic-bezier(.16,.82,.24,1); }
+  #dashboard-view-content.tab-swipe-enter-backward { animation: dashboard-tab-enter-backward 320ms cubic-bezier(.16,.82,.24,1); }
+  .tab-swipe-snapshot.tab-swipe-exit-forward { animation: dashboard-tab-exit-forward 320ms cubic-bezier(.16,.82,.24,1) forwards; }
+  .tab-swipe-snapshot.tab-swipe-exit-backward { animation: dashboard-tab-exit-backward 320ms cubic-bezier(.16,.82,.24,1) forwards; }
+
+  @keyframes dashboard-tab-enter-forward {
+    from { opacity: .32; transform: translate3d(18vw, 0, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+
+  @keyframes dashboard-tab-enter-backward {
+    from { opacity: .32; transform: translate3d(-18vw, 0, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+
+  @keyframes dashboard-tab-exit-forward {
+    to { opacity: .1; transform: translate3d(-14vw, 0, 0); }
+  }
+
+  @keyframes dashboard-tab-exit-backward {
+    to { opacity: .1; transform: translate3d(14vw, 0, 0); }
+  }
+}
+
+.dashboard-navigation button {
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dashboard-navigation .dashboard-view-button.selected {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: none;
+}
+
+header + .metrics.asset-overview-wrap {
+  margin-top: 12px;
+}
+
+body[data-dashboard-view="holdings"] #holdings-panel,
+body[data-dashboard-view="calendar"] #calendar-panel,
+body[data-dashboard-view="analysis"] #analysis-panel,
+body[data-dashboard-view="settings"] #settings {
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .dashboard-navigation {
+    gap: 4px;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .dashboard-navigation button {
+    min-width: 0;
+    height: 37px;
+    padding: 0 3px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  header + .metrics.asset-overview-wrap {
+    margin-top: 8px;
+  }
+
+  body[data-dashboard-view="holdings"] #holdings-panel,
+  body[data-dashboard-view="calendar"] #calendar-panel,
+  body[data-dashboard-view="analysis"] #analysis-panel,
+  body[data-dashboard-view="settings"] #settings {
+    margin-top: 12px;
+  }
+}

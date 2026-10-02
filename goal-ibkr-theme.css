@@ -1,0 +1,278 @@
+:root {
+  --goal-bg: #07090f;
+  --goal-card: #11141d;
+  --goal-card-2: #171b27;
+  --goal-line: #292f3e;
+  --goal-text: #f6f7fb;
+  --goal-muted: #9099aa;
+  --goal-gain: #ff4d68;
+  --goal-loss: #31d39a;
+  --goal-blue: #3979ff;
+}
+
+* { -webkit-tap-highlight-color: transparent; }
+body.theme-ibkr {
+  color-scheme: dark;
+  --ink: var(--goal-text);
+  --muted: var(--goal-muted);
+  --line: var(--goal-line);
+  --surface: var(--goal-card);
+  --background: var(--goal-bg);
+  --positive: var(--goal-gain);
+  --negative: var(--goal-loss);
+  --blue: var(--goal-blue);
+  margin: 0;
+  background: var(--goal-bg);
+  color: var(--goal-text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+}
+
+body:not(.theme-ibkr) { color-scheme: light; }
+
+body.theme-ibkr .simulator-shell { padding-top: max(16px, env(safe-area-inset-top)); }
+
+body.theme-ibkr .simulator-header {
+  color: var(--goal-text);
+  border-color: rgba(255,255,255,.06);
+  background: rgba(7, 9, 15, .9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body.theme-ibkr .simulator-header h1 { letter-spacing: -.035em; }
+
+body.theme-ibkr .simulator-view-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 12px 2px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  border-radius: 0;
+  background: rgba(7, 9, 15, .92);
+  box-shadow: none;
+  scrollbar-width: none;
+  backdrop-filter: blur(20px);
+}
+
+body.theme-ibkr .simulator-view-nav::-webkit-scrollbar { display: none; }
+
+body.theme-ibkr .simulator-view-nav button {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0 0 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #80899a;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+body.theme-ibkr .simulator-view-nav button.active {
+  background: transparent;
+  color: var(--goal-text);
+}
+
+body.theme-ibkr .simulator-view-nav button.active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--goal-gain);
+}
+
+body.theme-ibkr .panel,
+body.theme-ibkr .summary-grid > div,
+body.theme-ibkr .scenario-card,
+body.theme-ibkr .annual-node-card,
+body.theme-ibkr .asset-type-card,
+body.theme-ibkr .ai-assumption-row,
+body.theme-ibkr .ai-report-section,
+body.theme-ibkr .fx-stress-card {
+  border-color: var(--goal-line);
+  background: linear-gradient(180deg, rgba(23,27,39,.96), rgba(14,17,25,.98));
+  color: var(--goal-text);
+  box-shadow: none;
+}
+
+body.theme-ibkr .panel { border-radius: 16px; }
+
+body.theme-ibkr h1,
+body.theme-ibkr h2,
+body.theme-ibkr h3,
+body.theme-ibkr strong { color: var(--goal-text); }
+
+body.theme-ibkr span,
+body.theme-ibkr small,
+body.theme-ibkr p,
+body.theme-ibkr label { color: var(--goal-muted); }
+
+body.theme-ibkr button,
+body.theme-ibkr input,
+body.theme-ibkr select,
+body.theme-ibkr textarea {
+  border-color: var(--goal-line);
+  background: #0d1018;
+  color: var(--goal-text);
+  box-shadow: none;
+  font-family: inherit;
+}
+
+body.theme-ibkr input:focus,
+body.theme-ibkr select:focus,
+body.theme-ibkr textarea:focus {
+  border-color: var(--goal-gain);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(255,77,104,.12);
+}
+
+body.theme-ibkr .compact-button,
+body.theme-ibkr .text-button,
+body.theme-ibkr #plan-editor-toggle,
+body.theme-ibkr .add-plan-row { background: var(--goal-card-2); color: var(--goal-text); }
+
+body.theme-ibkr #run-ai-analysis,
+body.theme-ibkr #rerun-ai-analysis,
+body.theme-ibkr #ai-empty-run,
+body.theme-ibkr #ai-report-refresh,
+body.theme-ibkr .ai-forecast-button,
+body.theme-ibkr .primary-button {
+  border-color: var(--goal-gain);
+  background: var(--goal-gain);
+  color: #fff;
+}
+
+body.theme-ibkr .ai-forecast-button:disabled,
+body.theme-ibkr #ai-report-refresh:disabled {
+  border-color: #3a4152;
+  background: #3a4152;
+  color: #aeb5c2;
+}
+
+body.theme-ibkr .target-progress-track,
+body.theme-ibkr .scenario-progress,
+body.theme-ibkr .asset-estimate-track { background: #272c39; }
+body.theme-ibkr .target-progress-track i,
+body.theme-ibkr .scenario-progress i { background: linear-gradient(90deg, var(--goal-gain), #ff7a8d); }
+
+body.theme-ibkr .positive,
+body.theme-ibkr .gain { color: var(--goal-gain) !important; }
+body.theme-ibkr .negative,
+body.theme-ibkr .loss { color: var(--goal-loss) !important; }
+
+body.theme-ibkr .scenario-switch,
+body.theme-ibkr .chart-scenario-switch,
+body.theme-ibkr .chart-switch {
+  padding: 3px;
+  border: 1px solid var(--goal-line);
+  border-radius: 10px;
+  background: #0b0e15;
+}
+
+body.theme-ibkr .scenario-switch button,
+body.theme-ibkr .chart-scenario-switch button,
+body.theme-ibkr .chart-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--goal-muted);
+}
+
+body.theme-ibkr .scenario-switch button.active,
+body.theme-ibkr .chart-scenario-switch button.active,
+body.theme-ibkr .chart-switch button.active {
+  background: #2a2f3d;
+  color: var(--goal-text);
+}
+
+body.theme-ibkr .calculation-note,
+body.theme-ibkr .prediction-note,
+body.theme-ibkr .ai-disclaimer { border-color: rgba(144,153,170,.16); color: var(--goal-muted); }
+
+body.theme-ibkr dialog {
+  border-color: var(--goal-line);
+  background: var(--goal-card-2);
+  color: var(--goal-text);
+}
+
+body.theme-ibkr .money-input input[readonly],
+body.theme-ibkr .ai-analysis-state,
+body.theme-ibkr .ai-analysis-state.working,
+body.theme-ibkr .asset-type-row,
+body.theme-ibkr .asset-type-row input,
+body.theme-ibkr .fx-comparison > div,
+body.theme-ibkr .fx-comparison > label,
+body.theme-ibkr .plan-row,
+body.theme-ibkr .plan-field input,
+body.theme-ibkr .plan-field select,
+body.theme-ibkr .chart-detail,
+body.theme-ibkr .milestone-head,
+body.theme-ibkr .result-card,
+body.theme-ibkr .result-card.baseline {
+  border-color: var(--goal-line);
+  background: #0d1018;
+  color: var(--goal-text);
+}
+
+body.theme-ibkr .ai-analysis-state.error { background: rgba(255,77,104,.1); color: var(--goal-gain); }
+body.theme-ibkr .ai-analysis-state.working::before { border-color: #394153; border-top-color: var(--goal-gain); }
+body.theme-ibkr .remove-plan { background: #242a38; color: var(--goal-muted); }
+body.theme-ibkr .ai-report-summary p,
+body.theme-ibkr .ai-report-grid ul,
+body.theme-ibkr .ai-rate-detail p { color: #c5cad4; }
+
+body.theme-ibkr .ai-report-panel,
+body.theme-ibkr .ai-report-empty,
+body.theme-ibkr .ai-rate-table,
+body.theme-ibkr .ai-rate-row,
+body.theme-ibkr .ai-report-grid > div,
+body.theme-ibkr .ai-lever-row,
+body.theme-ibkr .asset-valuations,
+body.theme-ibkr .valuation-legend,
+body.theme-ibkr .valuation-legend-row,
+body.theme-ibkr .composition,
+body.theme-ibkr .milestone-section,
+body.theme-ibkr .milestone-table,
+body.theme-ibkr .milestone-row {
+  border-color: var(--goal-line) !important;
+}
+
+body.theme-ibkr .ai-rate-detail p.decision span,
+body.theme-ibkr .ai-lever-copy span,
+body.theme-ibkr .ai-reason-item b,
+body.theme-ibkr .ai-report-conclusion { color: var(--goal-text); }
+
+body.theme-ibkr .ai-sensitivity-row i,
+body.theme-ibkr .composition-track { background: #272c39; }
+body.theme-ibkr .ai-sensitivity-row i b { background: var(--goal-gain); }
+body.theme-ibkr .ai-lever-row,
+body.theme-ibkr .ai-rate-row { border-color: rgba(144,153,170,.15); }
+body.theme-ibkr .valuation-pie::after { background: var(--goal-card); }
+body.theme-ibkr #current-share,
+body.theme-ibkr .current-dot { background: #70798d; }
+body.theme-ibkr #existing-profit-share,
+body.theme-ibkr .existing-profit-dot { background: #ff4d68; }
+body.theme-ibkr #contribution-share,
+body.theme-ibkr .contribution-dot { background: #4f7cff; }
+body.theme-ibkr #profit-share,
+body.theme-ibkr .profit-dot { background: #f3b63f; }
+
+body.theme-ibkr .result-card.pessimistic { box-shadow: inset 3px 0 0 #788296; }
+body.theme-ibkr .result-card.baseline { box-shadow: inset 3px 0 0 #4f7cff; }
+body.theme-ibkr .result-card.optimistic { box-shadow: inset 3px 0 0 #31d39a; }
+body.theme-ibkr .result-label span { color: var(--goal-muted); }
+body.theme-ibkr .composition-head strong.up { color: var(--goal-gain); }
+body.theme-ibkr .composition-head strong.down { color: var(--goal-loss); }
+
+@media (max-width: 760px) {
+  body.theme-ibkr .simulator-shell { padding-right: 12px; padding-left: 12px; }
+  body.theme-ibkr .simulator-view-nav { margin-right: -12px; margin-left: -12px; padding-right: 14px; padding-left: 14px; }
+  body.theme-ibkr .panel { border-radius: 14px; }
+  body.theme-ibkr .target-current > strong { font-size: clamp(34px, 10vw, 46px); letter-spacing: -.04em; }
+}

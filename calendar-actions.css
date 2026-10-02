@@ -1,0 +1,43 @@
+.calendar-footer {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--line);
+}
+
+.calendar-footer .month-total {
+  flex: 1;
+  border-top: 0;
+}
+
+.calendar-ai-summary-area {
+  border-top: 1px solid var(--line);
+  padding: 14px 21px 18px;
+}
+
+.calendar-ai-summary-area > .daily-ai-summary-button {
+  display: block;
+  width: 100%;
+  padding: 11px 15px;
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .calendar-ai-summary-area {
+    padding: 12px 14px 14px;
+  }
+}
+
+#copy {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.holding-section-top-button {
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 0;
+  font-size: 17px;
+  font-weight: 700;
+}

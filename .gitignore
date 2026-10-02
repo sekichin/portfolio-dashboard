@@ -1,0 +1,10 @@
+.vercel
+.env*
+.DS_Store
+__pycache__/
+*.py[cod]
+backups/
+data/*
+!data/.gitkeep
+*.log
+*.pid

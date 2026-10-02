@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07090f">
+  <title>财富目标模拟器</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="goal-simulator.css?v=20260922-3">
+  <link rel="stylesheet" href="goal-ibkr-theme.css?v=20260830-5">
+</head>
+<body><script>const savedTheme=localStorage.getItem('portfolioThemeV1')||'ibkr';document.body.classList.toggle('theme-ibkr',savedTheme==='ibkr');document.querySelector('meta[name="theme-color"]').content=savedTheme==='ibkr'?'#07090f':'#f4f7f3'</script>
+  <main class="simulator-shell">
+    <header class="simulator-header"><h1>资产目标预测</h1><button id="back-dashboard" class="compact-button" type="button">返回持仓</button></header>
+
+    <nav class="simulator-view-nav" aria-label="资产预测页面">
+      <button class="active" data-simulator-view="target" type="button" aria-pressed="true">目标</button>
+      <button data-simulator-view="planning" type="button" aria-pressed="false">计划</button>
+      <button data-simulator-view="ai" type="button" aria-pressed="false">AI分析</button>
+      <button data-simulator-view="trend" type="button" aria-pressed="false">趋势</button>
+      <button data-simulator-view="result" type="button" aria-pressed="false">结果</button>
+    </nav>
+
+    <section class="panel target-panel" data-simulator-panel="target">
+      <div class="section-head">
+        <h2>目标进度</h2>
+        <button id="reset-simulator" class="text-button" type="button">恢复默认</button>
+      </div>
+      <input id="current-assets" type="hidden">
+      <div class="target-overview">
+        <div class="target-current">
+          <span>当前资产</span>
+          <strong id="target-current-value">—</strong>
+          <div class="target-progress-track"><i id="target-progress-bar"></i></div>
+          <div class="target-progress-meta"><span id="target-progress-rate">—</span><span id="target-progress-gap">—</span></div>
+        </div>
+        <div class="target-fields">
+          <label><span>目标金额</span><div class="money-input"><b>¥</b><input id="target-assets" type="number" min="0" step="1000"></div></label>
+          <label><span>目标时间</span><input id="target-date" type="month"></label>
+        </div>
+      </div>
+      <div class="current-performance">
+        <div><span>投入本金</span><strong id="current-principal">—</strong></div>
+        <div><span>已有收益</span><strong id="current-profit">—</strong><small id="current-profit-rate"></small></div>
+        <div><span>当前年化</span><strong id="historical-rate">—</strong><small id="historical-rate-start"></small></div>
+      </div>
+      <div class="target-contribution-line">
+        <span>预计个人投入</span>
+        <strong id="planned-contribution">—</strong>
+        <small id="planned-subsidy">—</small>
+      </div>
+    </section>
+
+    <section class="panel contribution-panel" data-simulator-panel="planning">
+      <div class="section-head">
+        <div><h2>定投计划</h2><strong id="monthly-equivalent">月均 ¥0</strong></div>
+        <button id="plan-editor-toggle" type="button">调整</button>
+      </div>
+      <div id="plan-editor" hidden>
+        <button id="add-plan" class="add-plan-row top-add-row" type="button">＋ 添加一项</button>
+        <div id="plan-list" class="plan-list"></div>
+        <p class="calculation-note">按月复利；定投在每月末计入。</p>
+      </div>
+    </section>
+
+    <section class="panel scenario-panel" data-simulator-panel="planning">
+      <div class="section-head asset-section-head">
+        <div><h2>预计年化</h2><strong id="weighted-rate"><span>悲观 0%</span><b>基准 0%</b><span>乐观 0%</span></strong></div>
+        <div class="asset-head-actions"><button id="asset-editor-toggle" class="compact-button" type="button">完成</button></div>
+      </div>
+      <div id="asset-editor">
+        <button id="add-asset-type" class="add-plan-row top-add-row" type="button">＋ 添加资产类型</button>
+        <div id="asset-type-list" class="asset-type-list"></div>
+      </div>
+    </section>
+
+    <section class="summary-grid" data-simulator-panel="target">
+      <article class="panel primary-summary">
+        <span>预计期末资产</span>
+        <strong id="baseline-ending">—</strong>
+        <small id="baseline-gap">—</small>
+        <div class="summary-detail-grid">
+          <div id="target-rate-hint" class="summary-progress">—</div>
+          <div><span>达标所需年化</span><b id="required-rate">—</b></div>
+          <div><span>当年计划年化</span><b id="planned-annual-rate">—</b></div>
+        </div>
+      </article>
+    </section>
+
+    <div id="ai-analysis-state" class="ai-analysis-state" data-simulator-panel="ai" hidden></div>
+
+    <section id="ai-report-empty" class="panel ai-report-empty" data-simulator-panel="ai">
+      <div class="section-head"><h2>AI资产蓝图</h2><button id="ai-empty-run" class="ai-forecast-button" type="button">开始分析</button></div>
+    </section>
+
+    <section id="ai-report-panel" class="panel ai-report-panel" data-simulator-panel="ai" hidden>
+      <div class="section-head ai-report-head">
+        <div><h2>AI资产蓝图</h2><strong id="ai-report-time">—</strong></div>
+        <button id="ai-report-refresh" class="compact-button" type="button">重新分析</button>
+      </div>
+      <div class="ai-report-hero">
+        <div id="ai-probability" class="ai-probability"><strong>—</strong><span>目标实现概率</span></div>
+        <div class="ai-report-summary"><b id="ai-report-status">—</b><p id="ai-report-summary">—</p><small>这是预测，不是事实</small></div>
+      </div>
+      <div class="ai-decision-tools">
+        <section class="ai-sensitivity-section">
+          <div class="ai-block-title">什么最决定我的未来？</div>
+          <div id="ai-sensitivity-list" class="ai-sensitivity-list"></div>
+        </section>
+        <section class="ai-lever-section">
+          <div class="ai-block-title">为了达到目标，可以做什么？</div>
+          <div id="ai-lever-list" class="ai-lever-list"></div>
+        </section>
+      </div>
+      <div class="ai-rate-table">
+        <div class="ai-block-title">AI年化假设</div>
+        <div id="ai-rate-list"></div>
+      </div>
+      <div class="ai-report-grid">
+        <div><div class="ai-block-title">判断依据</div><div id="ai-reason-list" class="ai-reason-list"></div></div>
+        <div><div class="ai-block-title">增长来源</div><ul id="ai-driver-list"></ul></div>
+        <div><div class="ai-block-title">主要风险</div><ul id="ai-risk-list"></ul></div>
+        <div><div class="ai-block-title">执行重点</div><ul id="ai-action-list"></ul></div>
+      </div>
+      <div id="ai-report-conclusion" class="ai-report-conclusion"></div>
+    </section>
+
+    <section class="panel chart-panel" data-simulator-panel="trend">
+      <div class="section-head">
+        <h2>资产趋势</h2>
+        <div class="chart-switch" role="group" aria-label="图表类型">
+          <button data-chart-view="line" type="button">折线</button>
+          <button data-chart-view="bar" type="button">年度柱状</button>
+        </div>
+      </div>
+      <div id="projection-scenario-switch" class="chart-switch projection-scenario-switch" role="group" aria-label="年度预测情景">
+        <button data-projection-scenario="bear" type="button">悲观</button>
+        <button data-projection-scenario="base" type="button">基准</button>
+        <button data-projection-scenario="bull" type="button">乐观</button>
+      </div>
+      <div class="chart-wrap"><canvas id="projection-chart"></canvas></div>
+      <div id="chart-detail" class="chart-detail" hidden>
+        <div class="chart-detail-head"><span id="chart-detail-date">—</span><strong id="chart-detail-total">—</strong></div>
+        <div class="chart-detail-grid">
+          <div><span>当前本金</span><strong id="chart-detail-principal">—</strong></div>
+          <div><span>已有收益</span><strong id="chart-detail-existing-profit">—</strong></div>
+          <div><span>累计投入</span><strong id="chart-detail-contribution">—</strong></div>
+          <div><span>预测收益</span><strong id="chart-detail-profit">—</strong></div>
+        </div>
+      </div>
+      <div class="milestone-section">
+        <div class="milestone-title">
+          <h2 id="milestone-title">年度节点</h2>
+          <div class="chart-switch compact-scenario-switch" role="group" aria-label="年度节点情景">
+            <button data-projection-scenario="bear" type="button">悲观</button>
+            <button data-projection-scenario="base" type="button">基准</button>
+            <button data-projection-scenario="bull" type="button">乐观</button>
+          </div>
+        </div>
+        <div class="milestone-table">
+          <div class="milestone-row milestone-head"><span>时间</span><span>总资产</span><span>累计投入</span><span>投资收益</span><span>距离目标</span></div>
+          <div id="milestone-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel fx-panel" data-simulator-panel="result">
+      <div class="section-head">
+        <div><h2>汇率压力测试</h2><strong id="fx-state-label">USD/JPY 无变化</strong></div>
+      </div>
+      <div class="fx-compact-row">
+        <div class="fx-slider-block">
+          <input id="fx-stress" class="fx-slider" type="range" min="-30" max="30" step="1" value="0">
+          <div class="fx-scale"><span>日元升值</span><span>当前</span><span>日元贬值</span></div>
+        </div>
+        <div class="fx-comparison">
+          <label><span>当前 USD/JPY</span><input id="current-usd-jpy" type="number" min="1" max="1000" step="0.01"></label>
+          <div><span>压力后 USD/JPY</span><strong id="stressed-usd-jpy">—</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel result-panel" data-simulator-panel="result">
+      <div class="section-head"><h2>情景结果</h2></div>
+      <div id="scenario-results" class="scenario-results"></div>
+      <div class="result-scenario-head">
+        <span>查看资产构成</span>
+        <div class="chart-switch compact-scenario-switch" role="group" aria-label="资产构成情景">
+          <button data-projection-scenario="bear" type="button">悲观</button>
+          <button data-projection-scenario="base" type="button">基准</button>
+          <button data-projection-scenario="bull" type="button">乐观</button>
+        </div>
+      </div>
+      <div class="asset-valuations">
+        <div class="composition-head"><span>各类资产目标估值</span><strong id="valuation-date">—</strong></div>
+        <div id="asset-valuation-list" class="asset-valuation-list"></div>
+      </div>
+      <div class="composition">
+        <div class="composition-head"><span id="composition-title">基准情景资金构成</span><strong id="base-profit">—</strong></div>
+        <div class="composition-track"><i id="current-share"></i><i id="existing-profit-share"></i><i id="contribution-share"></i><i id="profit-share"></i></div>
+        <div class="composition-legend"><span><i class="current-dot"></i>当前本金</span><span><i class="existing-profit-dot"></i>已有收益</span><span><i class="contribution-dot"></i>新增投入</span><span><i class="profit-dot"></i>预测收益</span></div>
+      </div>
+    </section>
+  </main>
+<script src="goal-simulator.js?v=20260926-1"></script>
+</body>
+</html>

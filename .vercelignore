@@ -1,0 +1,12 @@
+.git
+.venv
+.env.local
+.DS_Store
+__pycache__
+*.pyc
+backups
+data
+supabase
+tools
+requirements-local.txt
+启动持仓看板.command
