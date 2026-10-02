@@ -9,8 +9,11 @@
       "excludeFiles": "{data/**,backups/**,tools/**,.venv/**}"
     }
   },
+  "redirects": [
+    { "source": "/", "destination": "/login.html", "permanent": false }
+  ],
   "rewrites": [
-    { "source": "/", "destination": "/login.html" }
+    { "source": "/api/:path*", "destination": "/api/router?__path=:path*" }
   ],
   "headers": [
     {
